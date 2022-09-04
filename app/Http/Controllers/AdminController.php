@@ -10,12 +10,15 @@ use App\Actions\Fortify\AttemptToAuthenticate;
 use Laravel\Fortify\Actions\EnsureLoginIsNotThrottled;
 use Laravel\Fortify\Actions\PrepareAuthenticatedSession;
 use App\Actions\Fortify\RedirectIfTwoFactorAuthenticatable;
-use Laravel\Fortify\Contracts\LoginResponse;
 use Laravel\Fortify\Contracts\LoginViewResponse;
 use Laravel\Fortify\Contracts\LogoutResponse;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
 use Laravel\Fortify\Http\Requests\LoginRequest;
+use App\Http\Responses\LoginResponse;   
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
 class AdminController extends Controller
 {
@@ -37,6 +40,10 @@ class AdminController extends Controller
         $this->guard = $guard;
     }
 
+    public function loginForm(){
+        return view('auth.login',['guard'=>'admin']);
+    }
+
     /**
      * Show the login view.
      *
@@ -48,6 +55,8 @@ class AdminController extends Controller
         return app(LoginViewResponse::class);
     }
 
+
+
     /**
      * Attempt to authenticate a new session.
      *
@@ -56,9 +65,30 @@ class AdminController extends Controller
      */
     public function store(LoginRequest $request)
     {
-        return $this->loginPipeline($request)->then(function ($request) {
-            return app(LoginResponse::class);
-        });
+        $credentials = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required'],
+        ]);
+ 
+        if (Auth::attempt($credentials)) {
+            $user = Auth::user();
+            if($user->is_admin){
+                $request->session()->regenerate();
+ 
+            return redirect()->intended('/admin/dashboard');
+
+            }
+            else
+            return back()->withErrors([
+                'email' => 'The provided credentials do not match our records.',
+            ])->onlyInput('email');
+            
+        }
+ 
+        return back()->withErrors([
+            'email' => 'The provided credentials do not match our records.',
+        ])->onlyInput('email');
+
     }
 
     /**
@@ -69,17 +99,22 @@ class AdminController extends Controller
      */
     protected function loginPipeline(LoginRequest $request)
     {
+
+
         if (Fortify::$authenticateThroughCallback) {
+
             return (new Pipeline(app()))->send($request)->through(array_filter(
                 call_user_func(Fortify::$authenticateThroughCallback, $request)
             ));
         }
 
         if (is_array(config('fortify.pipelines.login'))) {
+
             return (new Pipeline(app()))->send($request)->through(array_filter(
                 config('fortify.pipelines.login')
             ));
         }
+
 
         return (new Pipeline(app()))->send($request)->through(array_filter([
             config('fortify.limiters.login') ? null : EnsureLoginIsNotThrottled::class,

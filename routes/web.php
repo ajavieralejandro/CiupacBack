@@ -1,7 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-
+use App\Http\Controllers\AdminController;
+use App\Http\Middleware\IsAdminMiddleware;
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -16,6 +17,24 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::middleware('admin:admin')->group(function(){
+    Route::get('/admin/login',[AdminController::class,'loginForm']);
+    Route::post('/admin/login',[AdminController::class,'store'])->name('admin.login');
+
+    
+});
+
+Route::middleware([
+   IsAdminMiddleware::class
+])->group(function () {
+    Route::get('/admin/dashboard', function () {
+        return view('dashboard');
+    })->name('dashboard');
+});
+
+
+
 
 Route::middleware([
     'auth:sanctum',
